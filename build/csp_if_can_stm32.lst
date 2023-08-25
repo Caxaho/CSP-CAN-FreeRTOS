@@ -1,0 +1,1385 @@
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 1
+
+
+   1              		.cpu cortex-m7
+   2              		.eabi_attribute 27, 1
+   3              		.eabi_attribute 28, 1
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.file	"csp_if_can_stm32.c"
+  14              		.text
+  15              	.Ltext0:
+  16              		.cfi_sections	.debug_frame
+  17              		.section	.text.csp_can_tx_stm32,"ax",%progbits
+  18              		.align	1
+  19              		.global	csp_can_tx_stm32
+  20              		.arch armv7e-m
+  21              		.syntax unified
+  22              		.thumb
+  23              		.thumb_func
+  24              		.fpu fpv5-sp-d16
+  26              	csp_can_tx_stm32:
+  27              	.LVL0:
+  28              	.LFB156:
+  29              		.file 1 "Drivers/interfaces/src/csp_if_can_stm32.c"
+   1:Drivers/interfaces/src/csp_if_can_stm32.c **** /*
+   2:Drivers/interfaces/src/csp_if_can_stm32.c ****  * if_can_stm32.h
+   3:Drivers/interfaces/src/csp_if_can_stm32.c ****  *
+   4:Drivers/interfaces/src/csp_if_can_stm32.c ****  *  Created on: 3 May 2023
+   5:Drivers/interfaces/src/csp_if_can_stm32.c ****  *      Author: Xavier Hoyle
+   6:Drivers/interfaces/src/csp_if_can_stm32.c ****  */
+   7:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+   8:Drivers/interfaces/src/csp_if_can_stm32.c **** #include "csp_if_can_stm32.h"
+   9:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  10:Drivers/interfaces/src/csp_if_can_stm32.c **** #include <string.h>
+  11:Drivers/interfaces/src/csp_if_can_stm32.c **** #include <stdlib.h>
+  12:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  13:Drivers/interfaces/src/csp_if_can_stm32.c **** #include <csp/csp.h>
+  14:Drivers/interfaces/src/csp_if_can_stm32.c **** #include <csp/csp_endian.h>
+  15:Drivers/interfaces/src/csp_if_can_stm32.c **** #include <csp/arch/csp_semaphore.h>
+  16:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  17:Drivers/interfaces/src/csp_if_can_stm32.c **** #include "csp_if_can_pbuf.h"
+  18:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  19:Drivers/interfaces/src/csp_if_can_stm32.c **** /* Max number of bytes per CAN frame */
+  20:Drivers/interfaces/src/csp_if_can_stm32.c **** #define MAX_BYTES_IN_CAN_FRAME 8
+  21:Drivers/interfaces/src/csp_if_can_stm32.c **** #define CFP_OVERHEAD           (sizeof(csp_id_t) + sizeof(uint16_t))
+  22:Drivers/interfaces/src/csp_if_can_stm32.c **** #define MAX_CAN_DATA_SIZE      (((1 << CFP_REMAIN_SIZE) * MAX_BYTES_IN_CAN_FRAME) - CFP_OVERHEAD)
+  23:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  24:Drivers/interfaces/src/csp_if_can_stm32.c **** /* CFP type */
+  25:Drivers/interfaces/src/csp_if_can_stm32.c **** enum cfp_frame_t {
+  26:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* First CFP fragment of a CSP packet */
+  27:Drivers/interfaces/src/csp_if_can_stm32.c **** 	CFP_BEGIN = 0,
+  28:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Remaining CFP fragment(s) of a CSP packet */
+  29:Drivers/interfaces/src/csp_if_can_stm32.c **** 	CFP_MORE = 1
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 2
+
+
+  30:Drivers/interfaces/src/csp_if_can_stm32.c **** };
+  31:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  32:Drivers/interfaces/src/csp_if_can_stm32.c **** int csp_can_rx_stm32(csp_iface_t *iface, uint32_t id, const uint8_t *data, uint8_t dlc, CSP_BASE_TY
+  33:Drivers/interfaces/src/csp_if_can_stm32.c **** {
+  34:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Test: random packet loss */
+  35:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (0) {
+  36:Drivers/interfaces/src/csp_if_can_stm32.c **** 		int random = rand();
+  37:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (random < RAND_MAX * 0.00005) {
+  38:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_log_warn("Dropping frame");
+  39:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_DRIVER;
+  40:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+  41:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+  42:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  43:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Bind incoming frame to a packet buffer */
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	csp_can_pbuf_element_t * buf = csp_can_pbuf_find(id, CFP_ID_CONN_MASK, task_woken);
+  45:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+  46:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (CFP_TYPE(id) == CFP_BEGIN) {
+  47:Drivers/interfaces/src/csp_if_can_stm32.c **** 			buf = csp_can_pbuf_new(id, task_woken);
+  48:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf == NULL) {
+  49:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_warn("No available packet buffer for CAN");
+  50:Drivers/interfaces/src/csp_if_can_stm32.c **** 				iface->rx_error++;
+  51:Drivers/interfaces/src/csp_if_can_stm32.c **** 				return CSP_ERR_NOMEM;
+  52:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+  53:Drivers/interfaces/src/csp_if_can_stm32.c **** 		} else {
+  54:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Out of order id 0x%X remain %u", CFP_ID(id), CFP_REMAIN(id));
+  55:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+  56:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_INVAL;
+  57:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+  58:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+  59:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  60:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Reset frame data offset */
+  61:Drivers/interfaces/src/csp_if_can_stm32.c **** 	uint8_t offset = 0;
+  62:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 	switch (CFP_TYPE(id)) {
+  64:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  65:Drivers/interfaces/src/csp_if_can_stm32.c **** 	case CFP_BEGIN:
+  66:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  67:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Discard packet if DLC is less than CSP id + CSP length fields */
+  68:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (dlc < (sizeof(csp_id_t) + sizeof(uint16_t))) {
+  69:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Short BEGIN frame received");
+  70:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+  71:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+  72:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+  73:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+  74:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  75:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Check for incomplete frame */
+  76:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (buf->packet != NULL) {
+  77:Drivers/interfaces/src/csp_if_can_stm32.c **** 			/* Reuse the buffer */
+  78:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Incomplete frame");
+  79:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+  80:Drivers/interfaces/src/csp_if_can_stm32.c **** 		} else {
+  81:Drivers/interfaces/src/csp_if_can_stm32.c **** 			/* Get free buffer for frame */
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			buf->packet = task_woken ? csp_buffer_get_isr(0) : csp_buffer_get(0); // CSP only supports one s
+  83:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+  84:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_error("Failed to get buffer for CSP_BEGIN packet");
+  85:Drivers/interfaces/src/csp_if_can_stm32.c **** 				iface->frame++;
+  86:Drivers/interfaces/src/csp_if_can_stm32.c **** 				csp_can_pbuf_free(buf, task_woken);
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 3
+
+
+  87:Drivers/interfaces/src/csp_if_can_stm32.c **** 				break;
+  88:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+  89:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+  90:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  91:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Copy CSP identifier (header) */
+  92:Drivers/interfaces/src/csp_if_can_stm32.c **** 		memcpy(&(buf->packet->id), data, sizeof(buf->packet->id));
+  93:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->id.ext = csp_ntoh32(buf->packet->id.ext);
+  94:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  95:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Copy CSP length (of data) */
+  96:Drivers/interfaces/src/csp_if_can_stm32.c **** 		memcpy(&(buf->packet->length), data + sizeof(csp_id_t), sizeof(buf->packet->length));
+  97:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->length = csp_ntoh16(buf->packet->length);
+  98:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+  99:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Check length against max */
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if ((buf->packet->length > MAX_CAN_DATA_SIZE) || (buf->packet->length > csp_buffer_data_size())) 
+ 101:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 102:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 103:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 104:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 105:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 106:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Reset RX count */
+ 107:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->rx_count = 0;
+ 108:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 109:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Set offset to prevent CSP header from being copied to CSP data */
+ 110:Drivers/interfaces/src/csp_if_can_stm32.c **** 		offset = sizeof(csp_id_t) + sizeof(uint16_t);
+ 111:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 112:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Set remain field - increment to include begin packet */
+ 113:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->remain = CFP_REMAIN(id) + 1;
+ 114:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 115:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* FALLTHROUGH */
+ 116:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 117:Drivers/interfaces/src/csp_if_can_stm32.c **** 	case CFP_MORE:
+ 118:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 119:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Check 'remain' field match */
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (CFP_REMAIN(id) != buf->remain - 1) {
+ 121:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 122:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 123:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+ 124:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 125:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 126:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 127:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Decrement remaining frames */
+ 128:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->remain--;
+ 129:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 130:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Check for overflow */
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if ((buf->rx_count + dlc - offset) > buf->packet->length) {
+ 132:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 133:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+ 134:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 135:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 136:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 137:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 138:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Copy dlc bytes into buffer */
+ 139:Drivers/interfaces/src/csp_if_can_stm32.c **** 		memcpy(&buf->packet->data[buf->rx_count], data + offset, dlc - offset);
+ 140:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->rx_count += dlc - offset;
+ 141:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 142:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Check if more data is expected */
+ 143:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (buf->rx_count != buf->packet->length)
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 4
+
+
+ 144:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 145:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 146:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Data is available */
+ 147:Drivers/interfaces/src/csp_if_can_stm32.c **** 		csp_qfifo_write(buf->packet, iface, task_woken);
+ 148:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 149:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Drop packet buffer reference */
+ 150:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet = NULL;
+ 151:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 152:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Free packet buffer */
+ 153:Drivers/interfaces/src/csp_if_can_stm32.c **** 		csp_can_pbuf_free(buf, task_woken);
+ 154:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 155:Drivers/interfaces/src/csp_if_can_stm32.c **** 		break;
+ 156:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 157:Drivers/interfaces/src/csp_if_can_stm32.c **** 	default:
+ 158:Drivers/interfaces/src/csp_if_can_stm32.c **** 		//csp_log_warn("Received unknown CFP message type");
+ 159:Drivers/interfaces/src/csp_if_can_stm32.c **** 		csp_can_pbuf_free(buf, task_woken);
+ 160:Drivers/interfaces/src/csp_if_can_stm32.c **** 		break;
+ 161:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 162:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** 	return CSP_ERR_NONE;
+ 164:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 165:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 166:Drivers/interfaces/src/csp_if_can_stm32.c **** int csp_can_tx_stm32(const csp_route_t * ifroute, csp_packet_t *packet) {
+  30              		.loc 1 166 73 view -0
+  31              		.cfi_startproc
+  32              		@ args = 0, pretend = 0, frame = 16
+  33              		@ frame_needed = 0, uses_anonymous_args = 0
+  34              		.loc 1 166 73 is_stmt 0 view .LVU1
+  35 0000 2DE9F04F 		push	{r4, r5, r6, r7, r8, r9, r10, fp, lr}
+  36              	.LCFI0:
+  37              		.cfi_def_cfa_offset 36
+  38              		.cfi_offset 4, -36
+  39              		.cfi_offset 5, -32
+  40              		.cfi_offset 6, -28
+  41              		.cfi_offset 7, -24
+  42              		.cfi_offset 8, -20
+  43              		.cfi_offset 9, -16
+  44              		.cfi_offset 10, -12
+  45              		.cfi_offset 11, -8
+  46              		.cfi_offset 14, -4
+  47 0004 85B0     		sub	sp, sp, #20
+  48              	.LCFI1:
+  49              		.cfi_def_cfa_offset 56
+  50 0006 0E46     		mov	r6, r1
+ 167:Drivers/interfaces/src/csp_if_can_stm32.c **** 	csp_iface_t * iface = ifroute->iface;
+  51              		.loc 1 167 2 is_stmt 1 view .LVU2
+  52              		.loc 1 167 16 is_stmt 0 view .LVU3
+  53 0008 0468     		ldr	r4, [r0]
+  54              	.LVL1:
+ 168:Drivers/interfaces/src/csp_if_can_stm32.c **** 	csp_can_interface_data_t * ifdata = iface->interface_data;
+  55              		.loc 1 168 2 is_stmt 1 view .LVU4
+  56              		.loc 1 168 29 is_stmt 0 view .LVU5
+  57 000a D4F804A0 		ldr	r10, [r4, #4]
+  58              	.LVL2:
+ 169:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 170:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Get an unique CFP id - this should be locked to prevent access from multiple tasks */
+ 171:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const uint32_t ident = ifdata->cfp_frame_id++;
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 5
+
+
+  59              		.loc 1 171 2 is_stmt 1 view .LVU6
+  60              		.loc 1 171 31 is_stmt 0 view .LVU7
+  61 000e DAF80010 		ldr	r1, [r10]
+  62              	.LVL3:
+  63              		.loc 1 171 45 view .LVU8
+  64 0012 4B1C     		adds	r3, r1, #1
+  65 0014 CAF80030 		str	r3, [r10]
+  66              	.LVL4:
+ 172:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 173:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Check protocol's max length - limit is 1 (first) frame + as many frames that can be specified i
+ 174:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (packet->length > MAX_CAN_DATA_SIZE) {
+  67              		.loc 1 174 2 is_stmt 1 view .LVU9
+  68              		.loc 1 174 12 is_stmt 0 view .LVU10
+  69 0018 B6F80A90 		ldrh	r9, [r6, #10]
+  70              		.loc 1 174 5 view .LVU11
+  71 001c 40F2FA73 		movw	r3, #2042
+  72 0020 9945     		cmp	r9, r3
+  73 0022 00F28580 		bhi	.L8
+ 175:Drivers/interfaces/src/csp_if_can_stm32.c **** 		return CSP_ERR_TX;
+ 176:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 177:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 178:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Insert destination node/via address into the CFP destination field */
+ 179:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const uint8_t dest = (ifroute->via != CSP_NO_VIA_ADDRESS) ? ifroute->via : packet->id.dst;
+  74              		.loc 1 179 2 is_stmt 1 view .LVU12
+  75              		.loc 1 179 31 is_stmt 0 view .LVU13
+  76 0026 0379     		ldrb	r3, [r0, #4]	@ zero_extendqisi2
+  77              		.loc 1 179 16 view .LVU14
+  78 0028 FF2B     		cmp	r3, #255
+  79 002a 3FD0     		beq	.L10
+  80              	.L3:
+  81              	.LVL5:
+ 180:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 181:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Create CAN identifier */
+ 182:Drivers/interfaces/src/csp_if_can_stm32.c **** 	uint32_t id = (CFP_MAKE_SRC(packet->id.src) |
+  82              		.loc 1 182 2 is_stmt 1 discriminator 4 view .LVU15
+  83              		.loc 1 182 17 is_stmt 0 discriminator 4 view .LVU16
+  84 002c F27B     		ldrb	r2, [r6, #15]	@ zero_extendqisi2
+  85 002e C2F34402 		ubfx	r2, r2, #1, #5
+ 183:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_DST(dest) |
+  86              		.loc 1 183 4 discriminator 4 view .LVU17
+  87 0032 DB04     		lsls	r3, r3, #19
+  88              	.LVL6:
+  89              		.loc 1 183 4 discriminator 4 view .LVU18
+  90 0034 03F47807 		and	r7, r3, #16252928
+ 182:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_DST(dest) |
+  91              		.loc 1 182 46 discriminator 4 view .LVU19
+  92 0038 47EA0262 		orr	r2, r7, r2, lsl #24
+ 184:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_ID(ident) |
+  93              		.loc 1 184 4 discriminator 4 view .LVU20
+  94 003c C1F30908 		ubfx	r8, r1, #0, #10
+  95              		.loc 1 184 23 discriminator 4 view .LVU21
+  96 0040 42EA0802 		orr	r2, r2, r8
+ 185:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_TYPE(CFP_BEGIN) |
+ 186:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_REMAIN((packet->length + CFP_OVERHEAD - 1) / MAX_BYTES_IN_CAN_FRAME));
+  97              		.loc 1 186 4 discriminator 4 view .LVU22
+  98 0044 09F10503 		add	r3, r9, #5
+  99 0048 DB08     		lsrs	r3, r3, #3
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 6
+
+
+ 100 004a 9B02     		lsls	r3, r3, #10
+ 101 004c 03F47F33 		and	r3, r3, #261120
+ 182:Drivers/interfaces/src/csp_if_can_stm32.c **** 			CFP_MAKE_DST(dest) |
+ 102              		.loc 1 182 11 discriminator 4 view .LVU23
+ 103 0050 1343     		orrs	r3, r3, r2
+ 104 0052 0193     		str	r3, [sp, #4]
+ 105              	.LVL7:
+ 187:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 188:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Calculate first frame data bytes */
+ 189:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const uint8_t avail = MAX_BYTES_IN_CAN_FRAME - CFP_OVERHEAD;
+ 106              		.loc 1 189 2 is_stmt 1 discriminator 4 view .LVU24
+ 190:Drivers/interfaces/src/csp_if_can_stm32.c **** 	uint8_t bytes = (packet->length <= avail) ? packet->length : avail;
+ 107              		.loc 1 190 2 discriminator 4 view .LVU25
+ 108              		.loc 1 190 61 is_stmt 0 discriminator 4 view .LVU26
+ 109 0054 B9F1020F 		cmp	r9, #2
+ 110 0058 28BF     		it	cs
+ 111 005a 4FF00209 		movcs	r9, #2
+ 112              		.loc 1 190 10 discriminator 4 view .LVU27
+ 113 005e 5FFA89F9 		uxtb	r9, r9
+ 114              	.LVL8:
+ 191:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 192:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Copy CSP headers and data */
+ 193:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const uint32_t csp_id_be = csp_hton32(packet->id.ext);
+ 115              		.loc 1 193 2 is_stmt 1 discriminator 4 view .LVU28
+ 116              		.loc 1 193 29 is_stmt 0 discriminator 4 view .LVU29
+ 117 0062 F068     		ldr	r0, [r6, #12]
+ 118              	.LVL9:
+ 119              		.loc 1 193 29 discriminator 4 view .LVU30
+ 120 0064 FFF7FEFF 		bl	csp_hton32
+ 121              	.LVL10:
+ 122              		.loc 1 193 29 discriminator 4 view .LVU31
+ 123 0068 0546     		mov	r5, r0
+ 124              	.LVL11:
+ 194:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const uint16_t csp_length_be = csp_hton16(packet->length);
+ 125              		.loc 1 194 2 is_stmt 1 discriminator 4 view .LVU32
+ 126              		.loc 1 194 33 is_stmt 0 discriminator 4 view .LVU33
+ 127 006a 7089     		ldrh	r0, [r6, #10]
+ 128              	.LVL12:
+ 129              		.loc 1 194 33 discriminator 4 view .LVU34
+ 130 006c FFF7FEFF 		bl	csp_hton16
+ 131              	.LVL13:
+ 195:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 196:Drivers/interfaces/src/csp_if_can_stm32.c **** 	uint8_t frame_buf[MAX_BYTES_IN_CAN_FRAME];
+ 132              		.loc 1 196 2 is_stmt 1 discriminator 4 view .LVU35
+ 197:Drivers/interfaces/src/csp_if_can_stm32.c **** 	memcpy(frame_buf, &csp_id_be, sizeof(csp_id_be));
+ 133              		.loc 1 197 2 discriminator 4 view .LVU36
+ 134 0070 0295     		str	r5, [sp, #8]
+ 198:Drivers/interfaces/src/csp_if_can_stm32.c **** 	memcpy(frame_buf + sizeof(csp_id_be), &csp_length_be, sizeof(csp_length_be));
+ 135              		.loc 1 198 2 discriminator 4 view .LVU37
+ 136 0072 ADF80C00 		strh	r0, [sp, #12]	@ movhi
+ 199:Drivers/interfaces/src/csp_if_can_stm32.c **** 	memcpy(frame_buf + CFP_OVERHEAD, packet->data, bytes);
+ 137              		.loc 1 199 2 discriminator 4 view .LVU38
+ 138              		.loc 1 199 41 is_stmt 0 discriminator 4 view .LVU39
+ 139 0076 06F1100B 		add	fp, r6, #16
+ 140              		.loc 1 199 2 discriminator 4 view .LVU40
+ 141 007a 4A46     		mov	r2, r9
+ 142 007c 5946     		mov	r1, fp
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 7
+
+
+ 143 007e 0DF10E00 		add	r0, sp, #14
+ 144              	.LVL14:
+ 145              		.loc 1 199 2 discriminator 4 view .LVU41
+ 146 0082 FFF7FEFF 		bl	memcpy
+ 147              	.LVL15:
+ 200:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 201:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Increment tx counter */
+ 202:Drivers/interfaces/src/csp_if_can_stm32.c **** 	uint16_t tx_count = bytes;
+ 148              		.loc 1 202 2 is_stmt 1 discriminator 4 view .LVU42
+ 149 0086 1FFA89F5 		uxth	r5, r9
+ 150              	.LVL16:
+ 203:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 204:Drivers/interfaces/src/csp_if_can_stm32.c **** 	const csp_can_driver_tx_t tx_func = ifdata->tx_func;
+ 151              		.loc 1 204 2 discriminator 4 view .LVU43
+ 152              		.loc 1 204 28 is_stmt 0 discriminator 4 view .LVU44
+ 153 008a DAF804A0 		ldr	r10, [r10, #4]
+ 154              	.LVL17:
+ 205:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 206:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Send first frame */
+ 207:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if ((tx_func)(iface->driver_data, id, frame_buf, CFP_OVERHEAD + bytes) != CSP_ERR_NONE) {
+ 155              		.loc 1 207 2 is_stmt 1 discriminator 4 view .LVU45
+ 156              		.loc 1 207 6 is_stmt 0 discriminator 4 view .LVU46
+ 157 008e 09F10603 		add	r3, r9, #6
+ 158 0092 DBB2     		uxtb	r3, r3
+ 159 0094 02AA     		add	r2, sp, #8
+ 160 0096 0199     		ldr	r1, [sp, #4]
+ 161 0098 A068     		ldr	r0, [r4, #8]
+ 162 009a D047     		blx	r10
+ 163              	.LVL18:
+ 164              		.loc 1 207 5 discriminator 4 view .LVU47
+ 165 009c 8146     		mov	r9, r0
+ 166              	.LVL19:
+ 167              		.loc 1 207 5 discriminator 4 view .LVU48
+ 168 009e 30B3     		cbz	r0, .L4
+ 208:Drivers/interfaces/src/csp_if_can_stm32.c **** 		//csp_log_warn("Failed to send CAN frame in csp_tx_can");
+ 209:Drivers/interfaces/src/csp_if_can_stm32.c **** 		iface->tx_error++;
+ 169              		.loc 1 209 3 is_stmt 1 view .LVU49
+ 170              		.loc 1 209 8 is_stmt 0 view .LVU50
+ 171 00a0 E369     		ldr	r3, [r4, #28]
+ 172              		.loc 1 209 18 view .LVU51
+ 173 00a2 0133     		adds	r3, r3, #1
+ 174 00a4 E361     		str	r3, [r4, #28]
+ 210:Drivers/interfaces/src/csp_if_can_stm32.c **** 		return CSP_ERR_DRIVER;
+ 175              		.loc 1 210 3 is_stmt 1 view .LVU52
+ 176              		.loc 1 210 10 is_stmt 0 view .LVU53
+ 177 00a6 6FF00A09 		mvn	r9, #10
+ 178 00aa 3DE0     		b	.L1
+ 179              	.LVL20:
+ 180              	.L10:
+ 179:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 181              		.loc 1 179 87 discriminator 2 view .LVU54
+ 182 00ac F389     		ldrh	r3, [r6, #14]
+ 183 00ae C3F30413 		ubfx	r3, r3, #4, #5
+ 184 00b2 BBE7     		b	.L3
+ 185              	.LVL21:
+ 186              	.L5:
+ 211:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 8
+
+
+ 212:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 213:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Send next frames if not complete */
+ 214:Drivers/interfaces/src/csp_if_can_stm32.c **** 	while (tx_count < packet->length) {
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 		while ( ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME0) != CAN_TSR_T
+ 216:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 217:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME2) != CAN_TSR_TME
+ 218:Drivers/interfaces/src/csp_if_can_stm32.c **** 			;
+ 219:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 220:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 221:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 222:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Calculate frame data bytes */
+ 223:Drivers/interfaces/src/csp_if_can_stm32.c **** 		bytes = (packet->length - tx_count >= MAX_BYTES_IN_CAN_FRAME) ? MAX_BYTES_IN_CAN_FRAME : packet->
+ 187              		.loc 1 223 3 is_stmt 1 view .LVU55
+ 188              		.loc 1 223 27 is_stmt 0 view .LVU56
+ 189 00b4 491B     		subs	r1, r1, r5
+ 190              		.loc 1 223 90 view .LVU57
+ 191 00b6 0B46     		mov	r3, r1
+ 192 00b8 0829     		cmp	r1, #8
+ 193 00ba A8BF     		it	ge
+ 194 00bc 0823     		movge	r3, #8
+ 195              		.loc 1 223 9 view .LVU58
+ 196 00be DBB2     		uxtb	r3, r3
+ 197              	.LVL22:
+ 224:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 225:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Prepare identifier */
+ 226:Drivers/interfaces/src/csp_if_can_stm32.c **** 		id = (CFP_MAKE_SRC(packet->id.src) |
+ 198              		.loc 1 226 3 is_stmt 1 view .LVU59
+ 199              		.loc 1 226 9 is_stmt 0 view .LVU60
+ 200 00c0 F27B     		ldrb	r2, [r6, #15]	@ zero_extendqisi2
+ 201 00c2 C2F34402 		ubfx	r2, r2, #1, #5
+ 202              		.loc 1 226 38 view .LVU61
+ 203 00c6 47EA0262 		orr	r2, r7, r2, lsl #24
+ 227:Drivers/interfaces/src/csp_if_can_stm32.c **** 				CFP_MAKE_DST(dest) |
+ 204              		.loc 1 227 24 view .LVU62
+ 205 00ca 48EA0202 		orr	r2, r8, r2
+ 228:Drivers/interfaces/src/csp_if_can_stm32.c **** 				CFP_MAKE_ID(ident) |
+ 229:Drivers/interfaces/src/csp_if_can_stm32.c **** 				CFP_MAKE_TYPE(CFP_MORE) |
+ 230:Drivers/interfaces/src/csp_if_can_stm32.c **** 				CFP_MAKE_REMAIN((packet->length - tx_count - bytes + MAX_BYTES_IN_CAN_FRAME - 1) / MAX_BYTES_IN
+ 206              		.loc 1 230 5 view .LVU63
+ 207 00ce C91A     		subs	r1, r1, r3
+ 208 00d0 0731     		adds	r1, r1, #7
+ 209 00d2 1ED4     		bmi	.L11
+ 210              	.L7:
+ 211 00d4 C910     		asrs	r1, r1, #3
+ 212 00d6 8902     		lsls	r1, r1, #10
+ 213 00d8 01F47F31 		and	r1, r1, #261120
+ 229:Drivers/interfaces/src/csp_if_can_stm32.c **** 				CFP_MAKE_REMAIN((packet->length - tx_count - bytes + MAX_BYTES_IN_CAN_FRAME - 1) / MAX_BYTES_IN
+ 214              		.loc 1 229 29 view .LVU64
+ 215 00dc 1143     		orrs	r1, r1, r2
+ 216              	.LVL23:
+ 231:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 232:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Increment tx counter */
+ 233:Drivers/interfaces/src/csp_if_can_stm32.c **** 		tx_count += bytes;
+ 217              		.loc 1 233 3 is_stmt 1 view .LVU65
+ 218              		.loc 1 233 12 is_stmt 0 view .LVU66
+ 219 00de 1D44     		add	r5, r5, r3
+ 220              	.LVL24:
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 9
+
+
+ 221              		.loc 1 233 12 view .LVU67
+ 222 00e0 ADB2     		uxth	r5, r5
+ 223              	.LVL25:
+ 234:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 235:Drivers/interfaces/src/csp_if_can_stm32.c **** 		/* Send frame */
+ 236:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if ((tx_func)(iface->driver_data, id, packet->data + tx_count - bytes, bytes) != CSP_ERR_NONE) {
+ 224              		.loc 1 236 3 is_stmt 1 view .LVU68
+ 225              		.loc 1 236 65 is_stmt 0 view .LVU69
+ 226 00e2 EA1A     		subs	r2, r5, r3
+ 227              		.loc 1 236 7 view .LVU70
+ 228 00e4 5A44     		add	r2, r2, fp
+ 229 00e6 41F48021 		orr	r1, r1, #262144
+ 230              	.LVL26:
+ 231              		.loc 1 236 7 view .LVU71
+ 232 00ea D047     		blx	r10
+ 233              	.LVL27:
+ 234              		.loc 1 236 6 view .LVU72
+ 235 00ec 98B9     		cbnz	r0, .L12
+ 236              	.L4:
+ 214:Drivers/interfaces/src/csp_if_can_stm32.c **** 		while ( ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME0) != CAN_TSR_T
+ 237              		.loc 1 214 8 is_stmt 1 view .LVU73
+ 214:Drivers/interfaces/src/csp_if_can_stm32.c **** 		while ( ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME0) != CAN_TSR_T
+ 238              		.loc 1 214 26 is_stmt 0 view .LVU74
+ 239 00ee 7189     		ldrh	r1, [r6, #10]
+ 214:Drivers/interfaces/src/csp_if_can_stm32.c **** 		while ( ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME0) != CAN_TSR_T
+ 240              		.loc 1 214 8 view .LVU75
+ 241 00f0 A942     		cmp	r1, r5
+ 242 00f2 16D9     		bls	.L13
+ 243              	.L6:
+ 218:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 244              		.loc 1 218 4 is_stmt 1 view .LVU76
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 245              		.loc 1 215 9 view .LVU77
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 246              		.loc 1 215 41 is_stmt 0 view .LVU78
+ 247 00f4 A068     		ldr	r0, [r4, #8]
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 248              		.loc 1 215 56 view .LVU79
+ 249 00f6 0368     		ldr	r3, [r0]
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 250              		.loc 1 215 66 view .LVU80
+ 251 00f8 9A68     		ldr	r2, [r3, #8]
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 252              		.loc 1 215 9 view .LVU81
+ 253 00fa 12F0806F 		tst	r2, #67108864
+ 254 00fe D9D1     		bne	.L5
+ 216:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME2) != CAN_TSR_TME
+ 255              		.loc 1 216 64 discriminator 1 view .LVU82
+ 256 0100 9A68     		ldr	r2, [r3, #8]
+ 215:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME1) != CAN_TSR_TME
+ 257              		.loc 1 215 105 discriminator 1 view .LVU83
+ 258 0102 12F0006F 		tst	r2, #134217728
+ 259 0106 D5D1     		bne	.L5
+ 217:Drivers/interfaces/src/csp_if_can_stm32.c **** 			;
+ 260              		.loc 1 217 64 view .LVU84
+ 261 0108 9B68     		ldr	r3, [r3, #8]
+ 216:Drivers/interfaces/src/csp_if_can_stm32.c **** 				    ((((CAN_HandleTypeDef *)(iface->driver_data))->Instance->TSR & CAN_TSR_TME2) != CAN_TSR_TME
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 10
+
+
+ 262              		.loc 1 216 103 view .LVU85
+ 263 010a 13F0805F 		tst	r3, #268435456
+ 264 010e F1D0     		beq	.L6
+ 265 0110 D0E7     		b	.L5
+ 266              	.LVL28:
+ 267              	.L11:
+ 230:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 268              		.loc 1 230 5 view .LVU86
+ 269 0112 0731     		adds	r1, r1, #7
+ 270 0114 DEE7     		b	.L7
+ 271              	.LVL29:
+ 272              	.L12:
+ 237:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Failed to send CAN frame in Tx callback");
+ 238:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->tx_error++;
+ 273              		.loc 1 238 4 is_stmt 1 view .LVU87
+ 274              		.loc 1 238 9 is_stmt 0 view .LVU88
+ 275 0116 E369     		ldr	r3, [r4, #28]
+ 276              		.loc 1 238 19 view .LVU89
+ 277 0118 0133     		adds	r3, r3, #1
+ 278 011a E361     		str	r3, [r4, #28]
+ 239:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_DRIVER;
+ 279              		.loc 1 239 4 is_stmt 1 view .LVU90
+ 280              		.loc 1 239 11 is_stmt 0 view .LVU91
+ 281 011c 6FF00A09 		mvn	r9, #10
+ 282 0120 02E0     		b	.L1
+ 283              	.L13:
+ 240:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 241:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 242:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 243:Drivers/interfaces/src/csp_if_can_stm32.c **** 	csp_buffer_free(packet);
+ 284              		.loc 1 243 2 is_stmt 1 view .LVU92
+ 285 0122 3046     		mov	r0, r6
+ 286 0124 FFF7FEFF 		bl	csp_buffer_free
+ 287              	.LVL30:
+ 244:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 245:Drivers/interfaces/src/csp_if_can_stm32.c **** 	return CSP_ERR_NONE;
+ 288              		.loc 1 245 2 view .LVU93
+ 289              	.L1:
+ 246:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 290              		.loc 1 246 1 is_stmt 0 view .LVU94
+ 291 0128 4846     		mov	r0, r9
+ 292 012a 05B0     		add	sp, sp, #20
+ 293              	.LCFI2:
+ 294              		.cfi_remember_state
+ 295              		.cfi_def_cfa_offset 36
+ 296              		@ sp needed
+ 297 012c BDE8F08F 		pop	{r4, r5, r6, r7, r8, r9, r10, fp, pc}
+ 298              	.LVL31:
+ 299              	.L8:
+ 300              	.LCFI3:
+ 301              		.cfi_restore_state
+ 175:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 302              		.loc 1 175 10 view .LVU95
+ 303 0130 6FF00909 		mvn	r9, #9
+ 304 0134 F8E7     		b	.L1
+ 305              		.cfi_endproc
+ 306              	.LFE156:
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 11
+
+
+ 308              		.section	.text.csp_can_rx_stm32,"ax",%progbits
+ 309              		.align	1
+ 310              		.global	csp_can_rx_stm32
+ 311              		.syntax unified
+ 312              		.thumb
+ 313              		.thumb_func
+ 314              		.fpu fpv5-sp-d16
+ 316              	csp_can_rx_stm32:
+ 317              	.LVL32:
+ 318              	.LFB155:
+  33:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Test: random packet loss */
+ 319              		.loc 1 33 1 is_stmt 1 view -0
+ 320              		.cfi_startproc
+ 321              		@ args = 4, pretend = 0, frame = 0
+ 322              		@ frame_needed = 0, uses_anonymous_args = 0
+  33:Drivers/interfaces/src/csp_if_can_stm32.c **** 	/* Test: random packet loss */
+ 323              		.loc 1 33 1 is_stmt 0 view .LVU97
+ 324 0000 2DE9F047 		push	{r4, r5, r6, r7, r8, r9, r10, lr}
+ 325              	.LCFI4:
+ 326              		.cfi_def_cfa_offset 32
+ 327              		.cfi_offset 4, -32
+ 328              		.cfi_offset 5, -28
+ 329              		.cfi_offset 6, -24
+ 330              		.cfi_offset 7, -20
+ 331              		.cfi_offset 8, -16
+ 332              		.cfi_offset 9, -12
+ 333              		.cfi_offset 10, -8
+ 334              		.cfi_offset 14, -4
+ 335 0004 0646     		mov	r6, r0
+ 336 0006 0C46     		mov	r4, r1
+ 337 0008 9046     		mov	r8, r2
+ 338 000a 9946     		mov	r9, r3
+ 339 000c 089F     		ldr	r7, [sp, #32]
+  35:Drivers/interfaces/src/csp_if_can_stm32.c **** 		int random = rand();
+ 340              		.loc 1 35 2 is_stmt 1 view .LVU98
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+ 341              		.loc 1 44 2 view .LVU99
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+ 342              		.loc 1 44 33 is_stmt 0 view .LVU100
+ 343 000e 3A46     		mov	r2, r7
+ 344              	.LVL33:
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+ 345              		.loc 1 44 33 view .LVU101
+ 346 0010 6549     		ldr	r1, .L38
+ 347              	.LVL34:
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+ 348              		.loc 1 44 33 view .LVU102
+ 349 0012 2046     		mov	r0, r4
+ 350              	.LVL35:
+  44:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (buf == NULL) {
+ 351              		.loc 1 44 33 view .LVU103
+ 352 0014 FFF7FEFF 		bl	csp_can_pbuf_find
+ 353              	.LVL36:
+  45:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (CFP_TYPE(id) == CFP_BEGIN) {
+ 354              		.loc 1 45 2 is_stmt 1 view .LVU104
+  45:Drivers/interfaces/src/csp_if_can_stm32.c **** 		if (CFP_TYPE(id) == CFP_BEGIN) {
+ 355              		.loc 1 45 5 is_stmt 0 view .LVU105
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 12
+
+
+ 356 0018 0546     		mov	r5, r0
+ 357 001a 68B1     		cbz	r0, .L34
+ 358              	.L15:
+  61:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 359              		.loc 1 61 2 is_stmt 1 view .LVU106
+ 360              	.LVL37:
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 361              		.loc 1 63 2 view .LVU107
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 362              		.loc 1 63 10 is_stmt 0 view .LVU108
+ 363 001c C4F38043 		ubfx	r3, r4, #18, #1
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 364              		.loc 1 63 2 view .LVU109
+ 365 0020 14F4802F 		tst	r4, #262144
+ 366 0024 1ED0     		beq	.L18
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 367              		.loc 1 63 2 view .LVU110
+ 368 0026 002B     		cmp	r3, #0
+ 369 0028 77D1     		bne	.L30
+ 159:Drivers/interfaces/src/csp_if_can_stm32.c **** 		break;
+ 370              		.loc 1 159 3 is_stmt 1 view .LVU111
+ 371 002a 3946     		mov	r1, r7
+ 372 002c 2846     		mov	r0, r5
+ 159:Drivers/interfaces/src/csp_if_can_stm32.c **** 		break;
+ 373              		.loc 1 159 3 is_stmt 0 view .LVU112
+ 374 002e FFF7FEFF 		bl	csp_can_pbuf_free
+ 375              	.LVL38:
+ 160:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 376              		.loc 1 160 3 is_stmt 1 view .LVU113
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 377              		.loc 1 163 9 is_stmt 0 view .LVU114
+ 378 0032 0020     		movs	r0, #0
+ 379              	.LVL39:
+ 380              	.L14:
+ 164:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 381              		.loc 1 164 1 view .LVU115
+ 382 0034 BDE8F087 		pop	{r4, r5, r6, r7, r8, r9, r10, pc}
+ 383              	.LVL40:
+ 384              	.L34:
+  46:Drivers/interfaces/src/csp_if_can_stm32.c **** 			buf = csp_can_pbuf_new(id, task_woken);
+ 385              		.loc 1 46 3 is_stmt 1 view .LVU116
+  46:Drivers/interfaces/src/csp_if_can_stm32.c **** 			buf = csp_can_pbuf_new(id, task_woken);
+ 386              		.loc 1 46 6 is_stmt 0 view .LVU117
+ 387 0038 14F4802F 		tst	r4, #262144
+ 388 003c 0CD1     		bne	.L16
+  47:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf == NULL) {
+ 389              		.loc 1 47 4 is_stmt 1 view .LVU118
+  47:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf == NULL) {
+ 390              		.loc 1 47 10 is_stmt 0 view .LVU119
+ 391 003e 3946     		mov	r1, r7
+ 392 0040 2046     		mov	r0, r4
+ 393              	.LVL41:
+  47:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf == NULL) {
+ 394              		.loc 1 47 10 view .LVU120
+ 395 0042 FFF7FEFF 		bl	csp_can_pbuf_new
+ 396              	.LVL42:
+  48:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_warn("No available packet buffer for CAN");
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 13
+
+
+ 397              		.loc 1 48 4 is_stmt 1 view .LVU121
+  48:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_warn("No available packet buffer for CAN");
+ 398              		.loc 1 48 7 is_stmt 0 view .LVU122
+ 399 0046 0546     		mov	r5, r0
+ 400 0048 0028     		cmp	r0, #0
+ 401 004a E7D1     		bne	.L15
+  50:Drivers/interfaces/src/csp_if_can_stm32.c **** 				return CSP_ERR_NOMEM;
+ 402              		.loc 1 50 5 is_stmt 1 view .LVU123
+  50:Drivers/interfaces/src/csp_if_can_stm32.c **** 				return CSP_ERR_NOMEM;
+ 403              		.loc 1 50 10 is_stmt 0 view .LVU124
+ 404 004c 336A     		ldr	r3, [r6, #32]
+  50:Drivers/interfaces/src/csp_if_can_stm32.c **** 				return CSP_ERR_NOMEM;
+ 405              		.loc 1 50 20 view .LVU125
+ 406 004e 0133     		adds	r3, r3, #1
+ 407 0050 3362     		str	r3, [r6, #32]
+  51:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+ 408              		.loc 1 51 5 is_stmt 1 view .LVU126
+  51:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+ 409              		.loc 1 51 12 is_stmt 0 view .LVU127
+ 410 0052 4FF0FF30 		mov	r0, #-1
+ 411              	.LVL43:
+  51:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+ 412              		.loc 1 51 12 view .LVU128
+ 413 0056 EDE7     		b	.L14
+ 414              	.LVL44:
+ 415              	.L16:
+  55:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_INVAL;
+ 416              		.loc 1 55 4 is_stmt 1 view .LVU129
+  55:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_INVAL;
+ 417              		.loc 1 55 9 is_stmt 0 view .LVU130
+ 418 0058 F36A     		ldr	r3, [r6, #44]
+  55:Drivers/interfaces/src/csp_if_can_stm32.c **** 			return CSP_ERR_INVAL;
+ 419              		.loc 1 55 16 view .LVU131
+ 420 005a 0133     		adds	r3, r3, #1
+ 421 005c F362     		str	r3, [r6, #44]
+  56:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 422              		.loc 1 56 4 is_stmt 1 view .LVU132
+  56:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 423              		.loc 1 56 11 is_stmt 0 view .LVU133
+ 424 005e 6FF00100 		mvn	r0, #1
+ 425              	.LVL45:
+  56:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 426              		.loc 1 56 11 view .LVU134
+ 427 0062 E7E7     		b	.L14
+ 428              	.LVL46:
+ 429              	.L18:
+  68:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Short BEGIN frame received");
+ 430              		.loc 1 68 3 is_stmt 1 view .LVU135
+  68:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_warn("Short BEGIN frame received");
+ 431              		.loc 1 68 6 is_stmt 0 view .LVU136
+ 432 0064 B9F1050F 		cmp	r9, #5
+ 433 0068 31D9     		bls	.L35
+  76:Drivers/interfaces/src/csp_if_can_stm32.c **** 			/* Reuse the buffer */
+ 434              		.loc 1 76 3 is_stmt 1 view .LVU137
+  76:Drivers/interfaces/src/csp_if_can_stm32.c **** 			/* Reuse the buffer */
+ 435              		.loc 1 76 10 is_stmt 0 view .LVU138
+ 436 006a EB68     		ldr	r3, [r5, #12]
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 14
+
+
+  76:Drivers/interfaces/src/csp_if_can_stm32.c **** 			/* Reuse the buffer */
+ 437              		.loc 1 76 6 view .LVU139
+ 438 006c 002B     		cmp	r3, #0
+ 439 006e 37D0     		beq	.L22
+  79:Drivers/interfaces/src/csp_if_can_stm32.c **** 		} else {
+ 440              		.loc 1 79 4 is_stmt 1 view .LVU140
+  79:Drivers/interfaces/src/csp_if_can_stm32.c **** 		} else {
+ 441              		.loc 1 79 9 is_stmt 0 view .LVU141
+ 442 0070 F36A     		ldr	r3, [r6, #44]
+  79:Drivers/interfaces/src/csp_if_can_stm32.c **** 		} else {
+ 443              		.loc 1 79 16 view .LVU142
+ 444 0072 0133     		adds	r3, r3, #1
+ 445 0074 F362     		str	r3, [r6, #44]
+ 446              	.LVL47:
+ 447              	.L23:
+  92:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->id.ext = csp_ntoh32(buf->packet->id.ext);
+ 448              		.loc 1 92 3 is_stmt 1 view .LVU143
+  92:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->id.ext = csp_ntoh32(buf->packet->id.ext);
+ 449              		.loc 1 92 15 is_stmt 0 view .LVU144
+ 450 0076 EB68     		ldr	r3, [r5, #12]
+ 451 0078 D8F80020 		ldr	r2, [r8]	@ unaligned
+  92:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->id.ext = csp_ntoh32(buf->packet->id.ext);
+ 452              		.loc 1 92 3 view .LVU145
+ 453 007c DA60     		str	r2, [r3, #12]	@ unaligned
+  93:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 454              		.loc 1 93 3 is_stmt 1 view .LVU146
+  93:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 455              		.loc 1 93 39 is_stmt 0 view .LVU147
+ 456 007e D5F80CA0 		ldr	r10, [r5, #12]
+  93:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 457              		.loc 1 93 25 view .LVU148
+ 458 0082 DAF80C00 		ldr	r0, [r10, #12]
+ 459 0086 FFF7FEFF 		bl	csp_ntoh32
+ 460              	.LVL48:
+  93:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 461              		.loc 1 93 23 view .LVU149
+ 462 008a CAF80C00 		str	r0, [r10, #12]
+  96:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->length = csp_ntoh16(buf->packet->length);
+ 463              		.loc 1 96 3 is_stmt 1 view .LVU150
+  96:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->length = csp_ntoh16(buf->packet->length);
+ 464              		.loc 1 96 15 is_stmt 0 view .LVU151
+ 465 008e EB68     		ldr	r3, [r5, #12]
+ 466 0090 B8F80420 		ldrh	r2, [r8, #4]	@ unaligned
+  96:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->packet->length = csp_ntoh16(buf->packet->length);
+ 467              		.loc 1 96 3 view .LVU152
+ 468 0094 5A81     		strh	r2, [r3, #10]	@ unaligned
+  97:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 469              		.loc 1 97 3 is_stmt 1 view .LVU153
+  97:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 470              		.loc 1 97 39 is_stmt 0 view .LVU154
+ 471 0096 D5F80CA0 		ldr	r10, [r5, #12]
+  97:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 472              		.loc 1 97 25 view .LVU155
+ 473 009a BAF80A00 		ldrh	r0, [r10, #10]
+ 474 009e FFF7FEFF 		bl	csp_ntoh16
+ 475              	.LVL49:
+  97:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 15
+
+
+ 476              		.loc 1 97 23 view .LVU156
+ 477 00a2 AAF80A00 		strh	r0, [r10, #10]	@ movhi
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 478              		.loc 1 100 3 is_stmt 1 view .LVU157
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 479              		.loc 1 100 11 is_stmt 0 view .LVU158
+ 480 00a6 EB68     		ldr	r3, [r5, #12]
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 481              		.loc 1 100 19 view .LVU159
+ 482 00a8 B3F80AA0 		ldrh	r10, [r3, #10]
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 483              		.loc 1 100 6 view .LVU160
+ 484 00ac 40F2FA73 		movw	r3, #2042
+ 485 00b0 9A45     		cmp	r10, r3
+ 486 00b2 03D8     		bhi	.L26
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 487              		.loc 1 100 75 discriminator 1 view .LVU161
+ 488 00b4 FFF7FEFF 		bl	csp_buffer_data_size
+ 489              	.LVL50:
+ 100:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->rx_error++;
+ 490              		.loc 1 100 49 discriminator 1 view .LVU162
+ 491 00b8 8245     		cmp	r10, r0
+ 492 00ba 25D9     		bls	.L27
+ 493              	.L26:
+ 101:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 494              		.loc 1 101 4 is_stmt 1 view .LVU163
+ 101:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 495              		.loc 1 101 9 is_stmt 0 view .LVU164
+ 496 00bc 336A     		ldr	r3, [r6, #32]
+ 101:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 497              		.loc 1 101 19 view .LVU165
+ 498 00be 0133     		adds	r3, r3, #1
+ 499 00c0 3362     		str	r3, [r6, #32]
+ 102:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 500              		.loc 1 102 4 is_stmt 1 view .LVU166
+ 501 00c2 3946     		mov	r1, r7
+ 502 00c4 2846     		mov	r0, r5
+ 503 00c6 FFF7FEFF 		bl	csp_can_pbuf_free
+ 504              	.LVL51:
+ 103:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 505              		.loc 1 103 4 view .LVU167
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 506              		.loc 1 163 9 is_stmt 0 view .LVU168
+ 507 00ca 0020     		movs	r0, #0
+ 103:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 508              		.loc 1 103 4 view .LVU169
+ 509 00cc B2E7     		b	.L14
+ 510              	.LVL52:
+ 511              	.L35:
+  70:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 512              		.loc 1 70 4 is_stmt 1 view .LVU170
+  70:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 513              		.loc 1 70 9 is_stmt 0 view .LVU171
+ 514 00ce F36A     		ldr	r3, [r6, #44]
+  70:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 515              		.loc 1 70 16 view .LVU172
+ 516 00d0 0133     		adds	r3, r3, #1
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 16
+
+
+ 517 00d2 F362     		str	r3, [r6, #44]
+  71:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 518              		.loc 1 71 4 is_stmt 1 view .LVU173
+ 519 00d4 3946     		mov	r1, r7
+ 520 00d6 2846     		mov	r0, r5
+ 521              	.LVL53:
+  71:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 522              		.loc 1 71 4 is_stmt 0 view .LVU174
+ 523 00d8 FFF7FEFF 		bl	csp_can_pbuf_free
+ 524              	.LVL54:
+  72:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 525              		.loc 1 72 4 is_stmt 1 view .LVU175
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 526              		.loc 1 163 9 is_stmt 0 view .LVU176
+ 527 00dc 0020     		movs	r0, #0
+  72:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 528              		.loc 1 72 4 view .LVU177
+ 529 00de A9E7     		b	.L14
+ 530              	.LVL55:
+ 531              	.L22:
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 532              		.loc 1 82 4 is_stmt 1 view .LVU178
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 533              		.loc 1 82 16 is_stmt 0 view .LVU179
+ 534 00e0 77B1     		cbz	r7, .L24
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 535              		.loc 1 82 31 discriminator 1 view .LVU180
+ 536 00e2 0020     		movs	r0, #0
+ 537              	.LVL56:
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 538              		.loc 1 82 31 discriminator 1 view .LVU181
+ 539 00e4 FFF7FEFF 		bl	csp_buffer_get_isr
+ 540              	.LVL57:
+ 541              	.L25:
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 542              		.loc 1 82 16 discriminator 4 view .LVU182
+ 543 00e8 E860     		str	r0, [r5, #12]
+  83:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_error("Failed to get buffer for CSP_BEGIN packet");
+ 544              		.loc 1 83 4 is_stmt 1 discriminator 4 view .LVU183
+  83:Drivers/interfaces/src/csp_if_can_stm32.c **** 				//csp_log_error("Failed to get buffer for CSP_BEGIN packet");
+ 545              		.loc 1 83 7 is_stmt 0 discriminator 4 view .LVU184
+ 546 00ea 0028     		cmp	r0, #0
+ 547 00ec C3D1     		bne	.L23
+  85:Drivers/interfaces/src/csp_if_can_stm32.c **** 				csp_can_pbuf_free(buf, task_woken);
+ 548              		.loc 1 85 5 is_stmt 1 view .LVU185
+  85:Drivers/interfaces/src/csp_if_can_stm32.c **** 				csp_can_pbuf_free(buf, task_woken);
+ 549              		.loc 1 85 10 is_stmt 0 view .LVU186
+ 550 00ee F36A     		ldr	r3, [r6, #44]
+  85:Drivers/interfaces/src/csp_if_can_stm32.c **** 				csp_can_pbuf_free(buf, task_woken);
+ 551              		.loc 1 85 17 view .LVU187
+ 552 00f0 0133     		adds	r3, r3, #1
+ 553 00f2 F362     		str	r3, [r6, #44]
+  86:Drivers/interfaces/src/csp_if_can_stm32.c **** 				break;
+ 554              		.loc 1 86 5 is_stmt 1 view .LVU188
+ 555 00f4 3946     		mov	r1, r7
+ 556 00f6 2846     		mov	r0, r5
+ 557 00f8 FFF7FEFF 		bl	csp_can_pbuf_free
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 17
+
+
+ 558              	.LVL58:
+  87:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+ 559              		.loc 1 87 5 view .LVU189
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 560              		.loc 1 163 9 is_stmt 0 view .LVU190
+ 561 00fc 0020     		movs	r0, #0
+  87:Drivers/interfaces/src/csp_if_can_stm32.c **** 			}
+ 562              		.loc 1 87 5 view .LVU191
+ 563 00fe 99E7     		b	.L14
+ 564              	.LVL59:
+ 565              	.L24:
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 566              		.loc 1 82 55 discriminator 2 view .LVU192
+ 567 0100 0020     		movs	r0, #0
+ 568              	.LVL60:
+  82:Drivers/interfaces/src/csp_if_can_stm32.c **** 			if (buf->packet == NULL) {
+ 569              		.loc 1 82 55 discriminator 2 view .LVU193
+ 570 0102 FFF7FEFF 		bl	csp_buffer_get
+ 571              	.LVL61:
+ 572 0106 EFE7     		b	.L25
+ 573              	.L27:
+ 107:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 574              		.loc 1 107 3 is_stmt 1 view .LVU194
+ 107:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 575              		.loc 1 107 17 is_stmt 0 view .LVU195
+ 576 0108 0023     		movs	r3, #0
+ 577 010a 2B80     		strh	r3, [r5]	@ movhi
+ 110:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 578              		.loc 1 110 3 is_stmt 1 view .LVU196
+ 579              	.LVL62:
+ 113:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 580              		.loc 1 113 3 view .LVU197
+ 113:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 581              		.loc 1 113 17 is_stmt 0 view .LVU198
+ 582 010c C4F38723 		ubfx	r3, r4, #10, #8
+ 113:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 583              		.loc 1 113 32 view .LVU199
+ 584 0110 0133     		adds	r3, r3, #1
+ 113:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 585              		.loc 1 113 15 view .LVU200
+ 586 0112 6B60     		str	r3, [r5, #4]
+ 110:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 587              		.loc 1 110 10 view .LVU201
+ 588 0114 4FF0060A 		mov	r10, #6
+ 589 0118 01E0     		b	.L19
+ 590              	.LVL63:
+ 591              	.L30:
+  63:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 592              		.loc 1 63 2 view .LVU202
+ 593 011a 4FF0000A 		mov	r10, #0
+ 594              	.LVL64:
+ 595              	.L19:
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 596              		.loc 1 120 3 is_stmt 1 view .LVU203
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 597              		.loc 1 120 7 is_stmt 0 view .LVU204
+ 598 011e C4F38724 		ubfx	r4, r4, #10, #8
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 18
+
+
+ 599              	.LVL65:
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 600              		.loc 1 120 28 view .LVU205
+ 601 0122 6B68     		ldr	r3, [r5, #4]
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 602              		.loc 1 120 37 view .LVU206
+ 603 0124 013B     		subs	r3, r3, #1
+ 120:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("CAN frame lost in CSP packet");
+ 604              		.loc 1 120 6 view .LVU207
+ 605 0126 9C42     		cmp	r4, r3
+ 606 0128 12D1     		bne	.L36
+ 128:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 607              		.loc 1 128 3 is_stmt 1 view .LVU208
+ 128:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 608              		.loc 1 128 14 is_stmt 0 view .LVU209
+ 609 012a 6B60     		str	r3, [r5, #4]
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 610              		.loc 1 131 3 is_stmt 1 view .LVU210
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 611              		.loc 1 131 11 is_stmt 0 view .LVU211
+ 612 012c 2A88     		ldrh	r2, [r5]
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 613              		.loc 1 131 22 view .LVU212
+ 614 012e 02EB0903 		add	r3, r2, r9
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 615              		.loc 1 131 28 view .LVU213
+ 616 0132 A3EB0A03 		sub	r3, r3, r10
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 617              		.loc 1 131 43 view .LVU214
+ 618 0136 EC68     		ldr	r4, [r5, #12]
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 619              		.loc 1 131 51 view .LVU215
+ 620 0138 6189     		ldrh	r1, [r4, #10]
+ 131:Drivers/interfaces/src/csp_if_can_stm32.c **** 			//csp_log_error("RX buffer overflow");
+ 621              		.loc 1 131 6 view .LVU216
+ 622 013a 8B42     		cmp	r3, r1
+ 623 013c 11DD     		ble	.L29
+ 133:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 624              		.loc 1 133 4 is_stmt 1 view .LVU217
+ 133:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 625              		.loc 1 133 9 is_stmt 0 view .LVU218
+ 626 013e F36A     		ldr	r3, [r6, #44]
+ 133:Drivers/interfaces/src/csp_if_can_stm32.c **** 			csp_can_pbuf_free(buf, task_woken);
+ 627              		.loc 1 133 16 view .LVU219
+ 628 0140 0133     		adds	r3, r3, #1
+ 629 0142 F362     		str	r3, [r6, #44]
+ 134:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 630              		.loc 1 134 4 is_stmt 1 view .LVU220
+ 631 0144 3946     		mov	r1, r7
+ 632 0146 2846     		mov	r0, r5
+ 633 0148 FFF7FEFF 		bl	csp_can_pbuf_free
+ 634              	.LVL66:
+ 135:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 635              		.loc 1 135 4 view .LVU221
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 636              		.loc 1 163 9 is_stmt 0 view .LVU222
+ 637 014c 0020     		movs	r0, #0
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 19
+
+
+ 135:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 638              		.loc 1 135 4 view .LVU223
+ 639 014e 71E7     		b	.L14
+ 640              	.L36:
+ 122:Drivers/interfaces/src/csp_if_can_stm32.c **** 			iface->frame++;
+ 641              		.loc 1 122 4 is_stmt 1 view .LVU224
+ 642 0150 3946     		mov	r1, r7
+ 643 0152 2846     		mov	r0, r5
+ 644 0154 FFF7FEFF 		bl	csp_can_pbuf_free
+ 645              	.LVL67:
+ 123:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 646              		.loc 1 123 4 view .LVU225
+ 123:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 647              		.loc 1 123 9 is_stmt 0 view .LVU226
+ 648 0158 F36A     		ldr	r3, [r6, #44]
+ 123:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 649              		.loc 1 123 16 view .LVU227
+ 650 015a 0133     		adds	r3, r3, #1
+ 651 015c F362     		str	r3, [r6, #44]
+ 124:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 652              		.loc 1 124 4 is_stmt 1 view .LVU228
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 653              		.loc 1 163 9 is_stmt 0 view .LVU229
+ 654 015e 0020     		movs	r0, #0
+ 124:Drivers/interfaces/src/csp_if_can_stm32.c **** 		}
+ 655              		.loc 1 124 4 view .LVU230
+ 656 0160 68E7     		b	.L14
+ 657              	.L29:
+ 139:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->rx_count += dlc - offset;
+ 658              		.loc 1 139 3 is_stmt 1 view .LVU231
+ 139:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->rx_count += dlc - offset;
+ 659              		.loc 1 139 10 is_stmt 0 view .LVU232
+ 660 0162 02F11000 		add	r0, r2, #16
+ 139:Drivers/interfaces/src/csp_if_can_stm32.c **** 		buf->rx_count += dlc - offset;
+ 661              		.loc 1 139 3 view .LVU233
+ 662 0166 A9EB0A02 		sub	r2, r9, r10
+ 663 016a 08EB0A01 		add	r1, r8, r10
+ 664 016e 2044     		add	r0, r0, r4
+ 665 0170 FFF7FEFF 		bl	memcpy
+ 666              	.LVL68:
+ 140:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 667              		.loc 1 140 3 is_stmt 1 view .LVU234
+ 140:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 668              		.loc 1 140 24 is_stmt 0 view .LVU235
+ 669 0174 A9EB0A03 		sub	r3, r9, r10
+ 140:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 670              		.loc 1 140 17 view .LVU236
+ 671 0178 2A88     		ldrh	r2, [r5]
+ 672 017a 12FA83F3 		uxtah	r3, r2, r3
+ 673 017e 9BB2     		uxth	r3, r3
+ 674 0180 2B80     		strh	r3, [r5]	@ movhi
+ 143:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 675              		.loc 1 143 3 is_stmt 1 view .LVU237
+ 143:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 676              		.loc 1 143 27 is_stmt 0 view .LVU238
+ 677 0182 E868     		ldr	r0, [r5, #12]
+ 143:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 20
+
+
+ 678              		.loc 1 143 35 view .LVU239
+ 679 0184 4289     		ldrh	r2, [r0, #10]
+ 143:Drivers/interfaces/src/csp_if_can_stm32.c **** 			break;
+ 680              		.loc 1 143 6 view .LVU240
+ 681 0186 9342     		cmp	r3, r2
+ 682 0188 01D0     		beq	.L37
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 683              		.loc 1 163 9 view .LVU241
+ 684 018a 0020     		movs	r0, #0
+ 685 018c 52E7     		b	.L14
+ 686              	.L37:
+ 147:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 687              		.loc 1 147 3 is_stmt 1 view .LVU242
+ 688 018e 3A46     		mov	r2, r7
+ 689 0190 3146     		mov	r1, r6
+ 690 0192 FFF7FEFF 		bl	csp_qfifo_write
+ 691              	.LVL69:
+ 150:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 692              		.loc 1 150 3 view .LVU243
+ 150:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 693              		.loc 1 150 15 is_stmt 0 view .LVU244
+ 694 0196 0024     		movs	r4, #0
+ 695 0198 EC60     		str	r4, [r5, #12]
+ 153:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 696              		.loc 1 153 3 is_stmt 1 view .LVU245
+ 697 019a 3946     		mov	r1, r7
+ 698 019c 2846     		mov	r0, r5
+ 699 019e FFF7FEFF 		bl	csp_can_pbuf_free
+ 700              	.LVL70:
+ 155:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 701              		.loc 1 155 3 view .LVU246
+ 163:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 702              		.loc 1 163 9 is_stmt 0 view .LVU247
+ 703 01a2 2046     		mov	r0, r4
+ 155:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 704              		.loc 1 155 3 view .LVU248
+ 705 01a4 46E7     		b	.L14
+ 706              	.L39:
+ 707 01a6 00BF     		.align	2
+ 708              	.L38:
+ 709 01a8 FF03F81F 		.word	536347647
+ 710              		.cfi_endproc
+ 711              	.LFE155:
+ 713              		.section	.text.csp_can_add_interface_stm32,"ax",%progbits
+ 714              		.align	1
+ 715              		.global	csp_can_add_interface_stm32
+ 716              		.syntax unified
+ 717              		.thumb
+ 718              		.thumb_func
+ 719              		.fpu fpv5-sp-d16
+ 721              	csp_can_add_interface_stm32:
+ 722              	.LVL71:
+ 723              	.LFB157:
+ 247:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 248:Drivers/interfaces/src/csp_if_can_stm32.c **** int csp_can_add_interface_stm32(csp_iface_t * iface) {
+ 724              		.loc 1 248 54 is_stmt 1 view -0
+ 725              		.cfi_startproc
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 21
+
+
+ 726              		@ args = 0, pretend = 0, frame = 0
+ 727              		@ frame_needed = 0, uses_anonymous_args = 0
+ 249:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 250:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if ((iface == NULL) || (iface->name == NULL) || (iface->interface_data == NULL)) {
+ 728              		.loc 1 250 2 view .LVU250
+ 729              		.loc 1 250 5 is_stmt 0 view .LVU251
+ 730 0000 C8B1     		cbz	r0, .L43
+ 248:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 731              		.loc 1 248 54 discriminator 1 view .LVU252
+ 732 0002 08B5     		push	{r3, lr}
+ 733              	.LCFI5:
+ 734              		.cfi_def_cfa_offset 8
+ 735              		.cfi_offset 3, -8
+ 736              		.cfi_offset 14, -4
+ 737 0004 0346     		mov	r3, r0
+ 738              		.loc 1 250 31 discriminator 1 view .LVU253
+ 739 0006 0268     		ldr	r2, [r0]
+ 740              		.loc 1 250 22 discriminator 1 view .LVU254
+ 741 0008 C2B1     		cbz	r2, .L44
+ 742              		.loc 1 250 56 discriminator 2 view .LVU255
+ 743 000a 4168     		ldr	r1, [r0, #4]
+ 744              		.loc 1 250 47 discriminator 2 view .LVU256
+ 745 000c C9B1     		cbz	r1, .L45
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 		return CSP_ERR_INVAL;
+ 252:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 253:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 254:Drivers/interfaces/src/csp_if_can_stm32.c **** 	csp_can_interface_data_t * ifdata = iface->interface_data;
+ 746              		.loc 1 254 2 is_stmt 1 view .LVU257
+ 747              	.LVL72:
+ 255:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if (ifdata->tx_func == NULL) {
+ 748              		.loc 1 255 2 view .LVU258
+ 749              		.loc 1 255 12 is_stmt 0 view .LVU259
+ 750 000e 4A68     		ldr	r2, [r1, #4]
+ 751              		.loc 1 255 5 view .LVU260
+ 752 0010 D2B1     		cbz	r2, .L46
+ 256:Drivers/interfaces/src/csp_if_can_stm32.c **** 		return CSP_ERR_INVAL;
+ 257:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 258:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 259:Drivers/interfaces/src/csp_if_can_stm32.c **** 	if ((iface->mtu == 0) || (iface->mtu > MAX_CAN_DATA_SIZE)) {
+ 753              		.loc 1 259 2 is_stmt 1 view .LVU261
+ 754              		.loc 1 259 12 is_stmt 0 view .LVU262
+ 755 0012 028A     		ldrh	r2, [r0, #16]
+ 756              		.loc 1 259 24 view .LVU263
+ 757 0014 013A     		subs	r2, r2, #1
+ 758 0016 92B2     		uxth	r2, r2
+ 759              		.loc 1 259 5 view .LVU264
+ 760 0018 40F2F970 		movw	r0, #2041
+ 761              	.LVL73:
+ 762              		.loc 1 259 5 view .LVU265
+ 763 001c 8242     		cmp	r2, r0
+ 764 001e 02D9     		bls	.L42
+ 260:Drivers/interfaces/src/csp_if_can_stm32.c **** 		iface->mtu = MAX_CAN_DATA_SIZE;
+ 765              		.loc 1 260 3 is_stmt 1 view .LVU266
+ 766              		.loc 1 260 14 is_stmt 0 view .LVU267
+ 767 0020 40F2FA72 		movw	r2, #2042
+ 768 0024 1A82     		strh	r2, [r3, #16]	@ movhi
+ 769              	.L42:
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 22
+
+
+ 261:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 262:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 263:Drivers/interfaces/src/csp_if_can_stm32.c **** 	ifdata->cfp_frame_id = 0;
+ 770              		.loc 1 263 2 is_stmt 1 view .LVU268
+ 771              		.loc 1 263 23 is_stmt 0 view .LVU269
+ 772 0026 0022     		movs	r2, #0
+ 773 0028 0A60     		str	r2, [r1]
+ 264:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 265:Drivers/interfaces/src/csp_if_can_stm32.c **** 	iface->nexthop = csp_can_tx_stm32;
+ 774              		.loc 1 265 2 is_stmt 1 view .LVU270
+ 775              		.loc 1 265 17 is_stmt 0 view .LVU271
+ 776 002a 094A     		ldr	r2, .L51
+ 777 002c DA60     		str	r2, [r3, #12]
+ 266:Drivers/interfaces/src/csp_if_can_stm32.c **** 
+ 267:Drivers/interfaces/src/csp_if_can_stm32.c **** 	return csp_iflist_add(iface);
+ 778              		.loc 1 267 2 is_stmt 1 view .LVU272
+ 779              		.loc 1 267 9 is_stmt 0 view .LVU273
+ 780 002e 1846     		mov	r0, r3
+ 781 0030 FFF7FEFF 		bl	csp_iflist_add
+ 782              	.LVL74:
+ 783              	.L40:
+ 268:Drivers/interfaces/src/csp_if_can_stm32.c **** }
+ 784              		.loc 1 268 1 view .LVU274
+ 785 0034 08BD     		pop	{r3, pc}
+ 786              	.LVL75:
+ 787              	.L43:
+ 788              	.LCFI6:
+ 789              		.cfi_def_cfa_offset 0
+ 790              		.cfi_restore 3
+ 791              		.cfi_restore 14
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 792              		.loc 1 251 10 view .LVU275
+ 793 0036 6FF00100 		mvn	r0, #1
+ 794              	.LVL76:
+ 795              		.loc 1 268 1 view .LVU276
+ 796 003a 7047     		bx	lr
+ 797              	.LVL77:
+ 798              	.L44:
+ 799              	.LCFI7:
+ 800              		.cfi_def_cfa_offset 8
+ 801              		.cfi_offset 3, -8
+ 802              		.cfi_offset 14, -4
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 803              		.loc 1 251 10 view .LVU277
+ 804 003c 6FF00100 		mvn	r0, #1
+ 805              	.LVL78:
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 806              		.loc 1 251 10 view .LVU278
+ 807 0040 F8E7     		b	.L40
+ 808              	.LVL79:
+ 809              	.L45:
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 810              		.loc 1 251 10 view .LVU279
+ 811 0042 6FF00100 		mvn	r0, #1
+ 812              	.LVL80:
+ 251:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 813              		.loc 1 251 10 view .LVU280
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 23
+
+
+ 814 0046 F5E7     		b	.L40
+ 815              	.LVL81:
+ 816              	.L46:
+ 256:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 817              		.loc 1 256 10 view .LVU281
+ 818 0048 6FF00100 		mvn	r0, #1
+ 819              	.LVL82:
+ 256:Drivers/interfaces/src/csp_if_can_stm32.c **** 	}
+ 820              		.loc 1 256 10 view .LVU282
+ 821 004c F2E7     		b	.L40
+ 822              	.L52:
+ 823 004e 00BF     		.align	2
+ 824              	.L51:
+ 825 0050 00000000 		.word	csp_can_tx_stm32
+ 826              		.cfi_endproc
+ 827              	.LFE157:
+ 829              		.text
+ 830              	.Letext0:
+ 831              		.file 2 "c:\\program files (x86)\\gnu arm embedded toolchain\\10 2020-q4-major\\arm-none-eabi\\inc
+ 832              		.file 3 "c:\\program files (x86)\\gnu arm embedded toolchain\\10 2020-q4-major\\arm-none-eabi\\inc
+ 833              		.file 4 "csp_build/include_csp/csp/csp_types.h"
+ 834              		.file 5 "csp_build/include_csp/csp/csp_interface.h"
+ 835              		.file 6 "csp_build/include_csp/csp/csp_rtable.h"
+ 836              		.file 7 "Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f746xx.h"
+ 837              		.file 8 "Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f7xx.h"
+ 838              		.file 9 "Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_can.h"
+ 839              		.file 10 "Drivers/interfaces/include/csp_if_can_stm32.h"
+ 840              		.file 11 "csp_build/include_csp/csp/csp_debug.h"
+ 841              		.file 12 "Drivers/interfaces/include/csp_if_can_pbuf.h"
+ 842              		.file 13 "csp_build/include_csp/csp/csp_iflist.h"
+ 843              		.file 14 "csp_build/include_csp/csp/csp_endian.h"
+ 844              		.file 15 "csp_build/include_csp/csp/csp_buffer.h"
+ 845              		.file 16 "<built-in>"
+ARM GAS  C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s 			page 24
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 csp_if_can_stm32.c
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:18     .text.csp_can_tx_stm32:00000000 $t
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:26     .text.csp_can_tx_stm32:00000000 csp_can_tx_stm32
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:309    .text.csp_can_rx_stm32:00000000 $t
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:316    .text.csp_can_rx_stm32:00000000 csp_can_rx_stm32
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:709    .text.csp_can_rx_stm32:000001a8 $d
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:714    .text.csp_can_add_interface_stm32:00000000 $t
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:721    .text.csp_can_add_interface_stm32:00000000 csp_can_add_interface_stm32
+C:\Users\XAVIER~1\AppData\Local\Temp\ccePU6mA.s:825    .text.csp_can_add_interface_stm32:00000050 $d
+
+UNDEFINED SYMBOLS
+csp_hton32
+csp_hton16
+memcpy
+csp_buffer_free
+csp_can_pbuf_find
+csp_can_pbuf_free
+csp_can_pbuf_new
+csp_ntoh32
+csp_ntoh16
+csp_buffer_data_size
+csp_buffer_get_isr
+csp_buffer_get
+csp_qfifo_write
+csp_iflist_add

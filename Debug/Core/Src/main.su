@@ -1,0 +1,17 @@
+../Drivers/CMSIS/Include/core_cm7.h:2606:26:ITM_SendChar	16	static,ignoring_inline_asm
+C:/dev/STM32_Projects/CSP-CAN-FreeRTOS/csp_build/include_csp/csp/csp_rtable.h:149:19:csp_route_set	16	static
+C:/dev/STM32_Projects/CSP-CAN-FreeRTOS/csp_build/include_csp/csp/csp.h:67:20:csp_conf_get_defaults	16	static
+../Core/Src/main.c:131:5:_write	32	static
+../Core/Src/main.c:142:5:main	120	static
+../Core/Src/main.c:271:6:SystemClock_Config	88	static
+../Core/Src/main.c:321:13:MX_CAN1_Init	8	static
+../Core/Src/main.c:380:13:MX_ETH_Init	8	static
+../Core/Src/main.c:429:13:MX_USART3_UART_Init	8	static
+../Core/Src/main.c:464:13:MX_USB_OTG_FS_PCD_Init	8	static
+../Core/Src/main.c:499:13:MX_GPIO_Init	56	static
+../Core/Src/main.c:550:6:SendSimpleCSPPacket	40	static
+../Core/Src/main.c:600:6:StartDefaultTask	16	static
+../Core/Src/main.c:619:6:CSPSend	16	static
+../Core/Src/main.c:646:6:CSPReceive	64	dynamic
+../Core/Src/main.c:767:6:HAL_TIM_PeriodElapsedCallback	16	static
+../Core/Src/main.c:784:6:Error_Handler	4	static,ignoring_inline_asm
